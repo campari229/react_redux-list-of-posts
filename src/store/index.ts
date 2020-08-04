@@ -1,56 +1,107 @@
-import { createStore, combineReducers, applyMiddleware } from 'redux';
+import { createStore, applyMiddleware, AnyAction} from 'redux';
 import { composeWithDevTools } from 'redux-devtools-extension';
 import thunk from 'redux-thunk';
-import { Dispatch } from 'react';
 
-import loadingReducer, { finishLoading, startLoading } from './loading';
-import messageReducer, { setMessage } from './message';
-import { fetchMessage } from '../helpers/api';
+import { FullPost } from '../Interfaces/Interfaces';
 
-/**
- * Each concrete reducer will receive all the actions but only its part of the state
- *
- * const rootReducer = (state = {}, action) => ({
- *   loading: loadingReducer(state.loading, action),
- *   message: messageReducer(state.message, action),
- * })
- */
-const rootReducer = combineReducers({
-  loading: loadingReducer,
-  message: messageReducer,
-});
+const SET_FULL_POSTS = 'SET_FULL_POSTS';
+const LOADING_TOGGLE = 'LOADING_TOGGLE';
+const FILTER = 'FILTER';
+const IS_LOADED = 'IS_LOADED';
+const REMOVE_POST = 'REMOVE_POST';
+const REMOVE_COMMENT = 'REMOVE_COMMENT';
 
-// We automatically get types returned by concrete reducers
-export type RootState = ReturnType<typeof rootReducer>;
+export const setPosts = (fullPosts: FullPost[]) => ({
+  type: SET_FULL_POSTS,
+  posts: fullPosts,
+})
+export const toggleLoading = () => ({ type: LOADING_TOGGLE })
+export const setFilter = (inputValue: string) => ({
+  type: FILTER,
+  inputValue,
+})
+export const setIsLoaded = () => ({ type: IS_LOADED })
+export const removePost = (id: number) => ({
+  type: REMOVE_POST,
+  postId: id,
+})
+export const removeComment = (postId: number, commentId: number) => ({
+  type: REMOVE_COMMENT,
+  commentId,
+  postId,
+})
 
-// Selectors - a function receiving Redux state and returning some data from it
-export const isLoading = (state: RootState) => state.loading;
-export const getMessage = (state: RootState) => state.message;
+export const getPosts = (state: RootState) => state.posts;
+export const loadingStatus = (state: RootState) => state.isLoading;
+export const isLoadedStatus = ( state: RootState ) => state.isLoaded;
 
-/**
- * Thunk - is a function that should be used as a normal action creator
- *
- * dispatch(loadMessage())
- */
-export const loadMessage = () => {
-  // inner function is an action handled by Redux Thunk
-  return async (dispatch: Dispatch<any>) => {
-    dispatch(startLoading());
+export type RootState = {
+  posts: FullPost[],
+  allPosts: FullPost[],
+  isLoading: boolean,
+  isLoaded: boolean,
+}
 
-    try {
-      const message = await fetchMessage();
+const initialState = {
+  posts: [],
+  allPosts: [],
+  isLoading: false,
+  isLoaded: false,
+}
 
-      dispatch(setMessage(message));
-    } catch (error) {
-      dispatch(setMessage('Error occurred when loading data'));
-    }
+const reducer = (state = initialState, action: AnyAction) => {
+  switch (action.type) {
+    case 'SET_FULL_POSTS':
+      return {
+        ...state,
+        posts: action.posts,
+        allPosts: action.posts,
+      }
 
-    dispatch(finishLoading());
-  };
-};
+    case 'LOADING_TOGGLE': 
+      return {
+        ...state,
+        isLoading: !state.isLoading
+      }
+
+    case 'IS_LOADED':
+        return {
+          ...state,
+          isLoaded: true,
+        }
+
+    case 'FILTER':
+      return {
+        ...state,
+        posts: [...state.allPosts].filter((post: FullPost) => {
+          return post.body.includes(action.inputValue) || post.title.includes(action.inputValue);
+        }),
+      }
+
+      case 'REMOVE_POST':
+        return {
+          ...state,
+          posts: [...state.posts].filter((post: FullPost) => post.id !== action.postId)
+        }
+      
+      case 'REMOVE_COMMENT':
+        let post = state.posts.find((post: FullPost) => post.id === action.postId) as unknown as FullPost
+        post.comments = post.comments.filter(comment => comment.id !== action.commentId)
+        return {
+          ...state,
+          posts: [
+            ...state.posts,
+            post,
+          ]
+        }
+
+    default:
+      return state
+  }
+}
 
 const store = createStore(
-  rootReducer,
+  reducer,
   composeWithDevTools(applyMiddleware(thunk)),
 );
 
